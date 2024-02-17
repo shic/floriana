@@ -1,0 +1,35 @@
+{
+    "name": "Wonderous: Flutter Web Example",
+    "short_name": "Wonderous",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#1e1b18",
+    "theme_color": "#1e1b18",
+    "description": "Navigate the intersection of history, art, and culture. Be educated and entertained as your learn about world-famous structures.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "icons/Icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/Icon-maskable-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "maskable"
+        },
+        {
+            "src": "icons/Icon-maskable-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "maskable"
+        }
+    ]
+}
