@@ -49,7 +49,7 @@ class GreatWallIllustration extends StatelessWidget {
   List<Widget> _buildMg(BuildContext context, Animation<double> anim) {
     return [
       IllustrationPiece(
-        fileName: 'great-wall.png',
+        fileName: 'collection1.png',
         heightFactor: config.shortMode ? .45 : .65,
         minHeight: 250,
         zoomAmt: .05,

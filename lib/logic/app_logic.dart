@@ -77,12 +77,15 @@ class AppLogic {
     isBootstrapComplete = true;
 
     // Load initial view (replace empty initial view which is covered by a native splash screen)
-    bool showIntro = settingsLogic.hasCompletedOnboarding.value == false;
-    if (showIntro) {
-      appRouter.go(ScreenPaths.intro);
-    } else {
-      appRouter.go(initialDeeplink ?? ScreenPaths.home);
-    }
+    // bool showIntro = settingsLogic.hasCompletedOnboarding.value == true;
+    // if (showIntro) {
+    //   appRouter.go(ScreenPaths.intro);
+    // } else {
+    //   appRouter.go(initialDeeplink ?? ScreenPaths.home);
+    // }
+
+    // Attention: hide App Guide
+    appRouter.go(initialDeeplink ?? ScreenPaths.home);
   }
 
   Future<T?> showFullscreenDialogRoute<T>(BuildContext context, Widget child, {bool transparent = false}) async {

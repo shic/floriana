@@ -5,7 +5,8 @@ class WonderIllustrationConfig {
   const WonderIllustrationConfig({
     this.zoom = _defaultZoom,
     this.isShowing = true,
-    this.enableFg = true,
+    // Attention: disable foreground image
+    this.enableFg = false,
     this.enableBg = true,
     this.enableMg = true,
     this.enableHero = true,

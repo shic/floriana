@@ -30,7 +30,9 @@ class WonderTitleText extends StatelessWidget {
       final smallWords = ['of', 'the'];
       bool useSmallText = smallWords.contains(text.trim());
       int i = pieces.indexOf(text);
-      bool addLinebreak = i == 0 && pieces.length > 1;
+      // This set the title two lines
+      // bool addLinebreak = i == 0 && pieces.length > 1;
+      bool addLinebreak = false;
       bool addSpace = !addLinebreak && i < pieces.length - 1;
       if (useSmallText == false) {
         text = StringUtils.capitalize(text);
