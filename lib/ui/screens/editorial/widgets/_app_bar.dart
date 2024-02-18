@@ -6,14 +6,14 @@ class _AppBar extends StatelessWidget {
   final ValueNotifier<int> sectionIndex;
   final ValueNotifier<double> scrollPos;
   final _titleValues = [
-    $strings.appBarTitleFactsHistory,
-    $strings.appBarTitleConstruction,
+    // $strings.appBarTitleFactsHistory,
+    // $strings.appBarTitleConstruction,
     $strings.appBarTitleLocation,
   ];
 
   final _iconValues = const [
-    'history.png',
-    'construction.png',
+    // 'history.png',
+    // 'construction.png',
     'geography.png',
   ];
 

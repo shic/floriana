@@ -94,49 +94,10 @@ class _ScrollingContent extends StatelessWidget {
               child: SizedBox(
                 width: $styles.sizes.maxContentWidth1,
                 child: Column(children: [
-                  ..._contentSection([
-                    Center(child: buildHiddenCollectible(slot: 0)),
 
-                    /// History 1
-                    buildDropCapText(data.historyInfo1),
-
-                    /// Quote1
-                    _CollapsingPullQuoteImage(data: data, scrollPos: scrollPos),
-                    Center(child: buildHiddenCollectible(slot: 1)),
-
-                    /// Callout1
-                    _Callout(text: data.callout1),
-
-                    /// History 2
-                    buildText(data.historyInfo2),
-                    _SectionDivider(scrollPos, sectionNotifier, index: 1),
-
-                    /// Construction 1
-                    buildDropCapText(data.constructionInfo1),
-                    Center(child: buildHiddenCollectible(slot: 2)),
-                  ]),
                   Gap($styles.insets.md),
-                  _YouTubeThumbnail(id: data.videoId, caption: data.videoCaption),
+                  buildDropCapText(data.locationInfo1),
                   Gap($styles.insets.md),
-                  ..._contentSection([
-                    /// Callout2
-                    Gap($styles.insets.xs),
-                    _Callout(text: data.callout2),
-
-                    /// Construction 2
-                    buildText(data.constructionInfo2),
-                    _SlidingImageStack(scrollPos: scrollPos, type: data.type),
-                    _SectionDivider(scrollPos, sectionNotifier, index: 2),
-
-                    /// Location
-                    buildDropCapText(data.locationInfo1),
-                    _LargeSimpleQuote(text: data.pullQuote2, author: data.pullQuote2Author),
-                    buildText(data.locationInfo2),
-                  ]),
-                  Gap($styles.insets.md),
-                  _MapsThumbnail(data),
-                  Gap($styles.insets.md),
-                  ..._contentSection([Center(child: buildHiddenCollectible(slot: 3))]),
                   Gap(150),
                 ]),
               ),
@@ -147,135 +108,9 @@ class _ScrollingContent extends StatelessWidget {
     );
   }
 
-  /// Helper widget to provide hz padding to multiple widgets. Keeps the layout of the scrolling content cleaner.
-  List<Widget> _contentSection(List<Widget> children) {
-    return [
-      for (int i = 0; i < children.length - 1; i++) ...[
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: $styles.insets.md),
-          child: children[i],
-        ),
-        Gap($styles.insets.md)
-      ],
-      Padding(
-        padding: EdgeInsets.symmetric(horizontal: $styles.insets.md),
-        child: children.last,
-      ),
-    ];
-  }
+
 }
 
-class _YouTubeThumbnail extends StatelessWidget {
-  const _YouTubeThumbnail({Key? key, required this.id, required this.caption}) : super(key: key);
-  final String id;
-  final String caption;
-
-  String get imageUrl => 'https://www.wonderous.info/youtube/$id.jpg';
-
-  @override
-  Widget build(BuildContext context) {
-    // On btn pressed:
-    void handlePressed() => context.go(ScreenPaths.video(id));
-
-    return MergeSemantics(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 400),
-        child: Column(
-          children: [
-            AppBtn.basic(
-              semanticLabel: $strings.scrollingContentSemanticYoutube,
-              onPressed: handlePressed,
-              child: Stack(children: [
-                AppImage(image: NetworkImage(imageUrl), fit: BoxFit.cover, scale: 1.0),
-                Positioned.fill(
-                  child: Center(
-                    child: Container(
-                      padding: EdgeInsets.all($styles.insets.xs),
-                      decoration: BoxDecoration(
-                        color: $styles.colors.black.withOpacity(0.66),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Icon(
-                        Icons.play_arrow,
-                        color: $styles.colors.white,
-                        size: $styles.insets.xl,
-                      ),
-                    ),
-                  ),
-                ),
-              ]),
-            ),
-            Gap($styles.insets.xs),
-            Padding(
-                padding: EdgeInsets.symmetric(horizontal: $styles.insets.md),
-                child: Text(caption, style: $styles.text.caption)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MapsThumbnail extends StatefulWidget {
-  const _MapsThumbnail(this.data, {Key? key}) : super(key: key);
-  final WonderData data;
-
-  @override
-  State<_MapsThumbnail> createState() => _MapsThumbnailState();
-}
-
-class _MapsThumbnailState extends State<_MapsThumbnail> {
-  CameraPosition get startPos => CameraPosition(target: LatLng(widget.data.lat, widget.data.lng), zoom: 3);
-
-  @override
-  Widget build(BuildContext context) {
-    void handlePressed() => context.go(ScreenPaths.maps(widget.data.type));
-    if (PlatformInfo.isDesktop) return SizedBox.shrink();
-    return AspectRatio(
-      aspectRatio: 1.65,
-      child: MergeSemantics(
-        child: Column(
-          children: [
-            Flexible(
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular($styles.corners.md),
-                child: AppBtn.basic(
-                  semanticLabel: $strings.scrollingContentSemanticOpen,
-                  onPressed: handlePressed,
-
-                  /// To prevent the map widget from absorbing the onPressed action, use a Stack + IgnorePointer + a transparent Container
-                  child: Stack(
-                    children: [
-                      Positioned.fill(child: ColoredBox(color: Colors.transparent)),
-                      IgnorePointer(
-                        child: GoogleMap(
-                          markers: {getMapsMarker(startPos.target)},
-                          zoomControlsEnabled: false,
-                          mapType: MapType.normal,
-                          mapToolbarEnabled: false,
-                          initialCameraPosition: startPos,
-                          myLocationButtonEnabled: false,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-            Gap($styles.insets.xs),
-            Semantics(
-              sortKey: OrdinalSortKey(0),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: $styles.insets.md),
-                child: Text(widget.data.mapCaption, style: $styles.text.caption),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class SliverBackgroundColor extends SingleChildRenderObjectWidget {
   const SliverBackgroundColor({

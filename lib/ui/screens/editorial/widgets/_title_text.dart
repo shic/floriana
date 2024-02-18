@@ -29,19 +29,7 @@ class _TitleText extends StatelessWidget {
                           color: data.type.fgColor,
                         ).animate().scale(curve: Curves.easeOut, delay: 500.ms),
                       ),
-                      Semantics(
-                        header: true,
-                        sortKey: OrdinalSortKey(1),
-                        child: Text(
-                          data.subTitle.toUpperCase(),
-                          style: $styles.text.title2,
-                        ).animate().fade(delay: 100.ms),
-                      ),
-                      Expanded(
-                        child: Divider(
-                          color: data.type.fgColor,
-                        ).animate().scale(curve: Curves.easeOut, delay: 500.ms),
-                      ),
+
                     ],
                   ),
                   Gap($styles.insets.md),
@@ -57,14 +45,7 @@ class _TitleText extends StatelessWidget {
                           return WonderTitleText(data, enableHero: enableHero);
                         }),
                   ),
-                  Gap($styles.insets.xs),
 
-                  /// Region
-                  Text(
-                    data.regionTitle.toUpperCase(),
-                    style: $styles.text.title1,
-                    textAlign: TextAlign.center,
-                  ),
                   Gap($styles.insets.md),
 
                   /// Compass divider
@@ -85,10 +66,11 @@ class _TitleText extends StatelessWidget {
 
                   /// Date
                   Text(
-                    $strings.titleLabelDate(StringUtils.formatYr(data.startYr), StringUtils.formatYr(data.endYr)),
+                    data.subTitle.toUpperCase(),
                     style: $styles.text.h4,
                     textAlign: TextAlign.center,
                   ),
+
                   Gap($styles.insets.sm),
                 ],
               ),

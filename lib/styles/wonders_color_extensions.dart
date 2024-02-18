@@ -6,7 +6,7 @@ extension WonderColorExtensions on WonderType {
       case WonderType.pyramidsGiza:
         return const Color(0xFF16184D);
       case WonderType.greatWall:
-        return const Color(0xFF642828);
+        return const Color(0xFFC3943F);
       case WonderType.petra:
         return const Color(0xFF444B9B);
       case WonderType.colosseum:
