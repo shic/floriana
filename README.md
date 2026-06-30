@@ -30,8 +30,22 @@ python3 scripts/validate_static.py --base-url http://127.0.0.1:4173
 2. In GitHub, open Settings -> Pages.
 3. Set Build and deployment -> Source to "GitHub Actions".
 4. Add the custom domain `florianacelani.com` in the Pages settings.
-5. Point DNS for `florianacelani.com` at GitHub Pages and set `www` as a CNAME
-   to the repository Pages host if `www` should also work.
+5. Point DNS for `florianacelani.com` at GitHub Pages:
+
+   ```text
+   @     A      185.199.108.153
+   @     A      185.199.109.153
+   @     A      185.199.110.153
+   @     A      185.199.111.153
+   @     AAAA   2606:50c0:8000::153
+   @     AAAA   2606:50c0:8001::153
+   @     AAAA   2606:50c0:8002::153
+   @     AAAA   2606:50c0:8003::153
+   www   CNAME  shic.github.io
+   ```
+
+   Remove the old apex `A` record that points to the WordPress host before
+   adding the GitHub Pages records. DNS changes can take up to 24 hours.
 
 The export includes `public/CNAME` for branch-based Pages compatibility, but the
 workflow deployment still needs the custom domain configured in GitHub Pages.
