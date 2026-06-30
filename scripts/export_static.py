@@ -21,7 +21,8 @@ from urllib.request import Request, urlopen
 SITE = "https://florianacelani.com"
 HOST = "florianacelani.com"
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC = ROOT / "public"
+SITE_ROOT = ROOT
+EXPORT_MANIFEST = ROOT / ".static-export-manifest"
 STATIC_ASSET = "/assets/floriana-static.js"
 NOOP_ENDPOINT = "/static-noop.json"
 CONTACT_EMAIL = "celanifloriana@gmail.com"
@@ -34,6 +35,50 @@ STATIC_SEED_ASSETS = (
     SITE + "/wp-content/plugins/revslider/public/css/sr7.lp.css",
     SITE + "/wp-content/plugins/revslider/public/css/sr7.media.css",
 )
+LEGACY_GENERATED_ROOT_PATHS = {
+    ".nojekyll",
+    "404.html",
+    "CNAME",
+    "a-timeline-of-painting-at-avada-galerie",
+    "about",
+    "abstract-model",
+    "arkhaia",
+    "assets",
+    "author",
+    "avada-galerie-workshop",
+    "bring-your-curiosity-new-exhibition",
+    "category",
+    "contact",
+    "disorders",
+    "exhibitions",
+    "hello-world",
+    "index.html",
+    "modern-art-exhibition-at-avada-galerie",
+    "moments",
+    "new-perspectives-on-storytelling-and-art",
+    "opere",
+    "portfolio-item",
+    "portfolio_category",
+    "retrospectiva-and-divinity",
+    "sample-page",
+    "silence-and-noise",
+    "static-noop.json",
+    "stories",
+    "the-creative-process-of-richard-vora",
+    "this-weekend-at-avada-galerie",
+    "valerie-dicker-interview",
+    "wp-content",
+    "wp-includes",
+}
+PRESERVED_ROOT_PATHS = {
+    ".DS_Store",
+    ".git",
+    ".github",
+    ".gitignore",
+    ".static-export-manifest",
+    "README.md",
+    "scripts",
+}
 
 USER_AGENT = "floriana-static-export/1.0 (+https://github.com/)"
 MAX_PAGES = 300
@@ -167,7 +212,7 @@ def local_path_for_url(url: str, *, asset: bool = False) -> Path:
         path = path.rstrip("/") + "/index.html"
     elif not path or path == "/":
         path = "/index.html"
-    return PUBLIC / path.lstrip("/")
+    return SITE_ROOT / path.lstrip("/")
 
 
 def relative_reference(source_file: Path, url: str) -> str:
@@ -179,9 +224,9 @@ def relative_reference(source_file: Path, url: str) -> str:
 
     asset = is_asset_path(parsed.path)
     target = local_path_for_url(SITE + parsed.path, asset=asset)
-    source_dir = source_file.parent.relative_to(PUBLIC).as_posix()
+    source_dir = source_file.parent.relative_to(SITE_ROOT).as_posix()
     source_dir = "." if source_dir == "." else source_dir
-    target_rel = target.relative_to(PUBLIC).as_posix()
+    target_rel = target.relative_to(SITE_ROOT).as_posix()
     rel = posixpath.relpath(target_rel, start=source_dir)
 
     if not asset and target_rel.endswith("/index.html"):
@@ -428,9 +473,13 @@ def inject_static_assets(html_text: str) -> str:
     return html_text + "\n" + script + "\n"
 
 
+WRITTEN_FILES: set[Path] = set()
+
+
 def write_file(path: Path, data: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
+    WRITTEN_FILES.add(path)
 
 
 def write_text(path: Path, text: str) -> None:
@@ -462,19 +511,19 @@ def process_asset(raw: bytes, url: str, content_type: str, output_file: Path) ->
 
 
 def write_support_files() -> None:
-    write_text(PUBLIC / ".nojekyll", "")
-    write_text(PUBLIC / "CNAME", HOST + "\n")
-    write_text(PUBLIC / "static-noop.json", "{}\n")
+    write_text(SITE_ROOT / ".nojekyll", "")
+    write_text(SITE_ROOT / "CNAME", HOST + "\n")
+    write_text(SITE_ROOT / "static-noop.json", "{}\n")
     for source, target in KNOWN_REDIRECTS.items():
         write_redirect(local_path_for_url(SITE + source), target)
     icon_font_svg = (
-        PUBLIC
+        SITE_ROOT
         / "wp-content/uploads/fusion-icons/Galerie-Icon-Set-v1.0/fonts/Galerie-Icon-Set.svg"
     )
     if not icon_font_svg.exists():
         write_text(icon_font_svg, '<svg xmlns="http://www.w3.org/2000/svg"></svg>\n')
     write_text(
-        PUBLIC / "404.html",
+        SITE_ROOT / "404.html",
         """<!doctype html>
 <html lang="it">
 <head>
@@ -490,7 +539,7 @@ def write_support_files() -> None:
 """,
     )
     write_text(
-        PUBLIC / STATIC_ASSET.lstrip("/"),
+        SITE_ROOT / STATIC_ASSET.lstrip("/"),
         f"""(() => {{
   const CONTACT_EMAIL = "{CONTACT_EMAIL}";
 
@@ -545,10 +594,49 @@ def write_redirect(path: Path, target: str) -> None:
     )
 
 
+def read_manifest() -> set[str]:
+    if not EXPORT_MANIFEST.exists():
+        return set()
+    return {
+        line.strip()
+        for line in EXPORT_MANIFEST.read_text(encoding="utf-8", errors="replace").splitlines()
+        if line.strip()
+    }
+
+
+def remove_generated_paths() -> None:
+    generated = LEGACY_GENERATED_ROOT_PATHS | read_manifest()
+    for rel_path in sorted(generated, key=lambda value: value.count("/"), reverse=True):
+        if rel_path in PRESERVED_ROOT_PATHS or rel_path.startswith(("../", "/")):
+            continue
+        target = (SITE_ROOT / rel_path).resolve()
+        try:
+            target.relative_to(SITE_ROOT.resolve())
+        except ValueError:
+            continue
+        if not target.exists():
+            continue
+        if target.is_dir():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+
+
+def write_manifest() -> None:
+    top_level_paths = sorted(
+        {
+            path.relative_to(SITE_ROOT).parts[0]
+            for path in WRITTEN_FILES
+            if path.exists() and path.relative_to(SITE_ROOT).parts
+        }
+    )
+    EXPORT_MANIFEST.write_text("\n".join(top_level_paths) + "\n", encoding="utf-8")
+
+
 def export_site() -> None:
-    if PUBLIC.exists():
-        shutil.rmtree(PUBLIC)
-    PUBLIC.mkdir(parents=True)
+    remove_generated_paths()
+    SITE_ROOT.mkdir(parents=True, exist_ok=True)
+    WRITTEN_FILES.clear()
 
     page_queue: deque[str] = deque(sorted(extract_sitemap_urls()))
     asset_queue: deque[str] = deque(STATIC_SEED_ASSETS)
@@ -601,7 +689,8 @@ def export_site() -> None:
                 asset_queue.append(discovered_url)
 
     write_support_files()
-    print(f"\nExported {len(seen_pages)} pages and {len(seen_assets)} assets to {PUBLIC}")
+    write_manifest()
+    print(f"\nExported {len(seen_pages)} pages and {len(seen_assets)} assets to repository root")
 
 
 if __name__ == "__main__":

@@ -5,10 +5,9 @@ This repository contains a static export of the WordPress site at
 
 ## Structure
 
-- `public/` is the generated static website published by GitHub Pages.
-- `scripts/export_static.py` refreshes `public/` from the live WordPress site.
+- Static site files live at the repository root for GitHub Pages branch deploys.
+- `scripts/export_static.py` refreshes the root static export from the live WordPress site.
 - `scripts/validate_static.py` checks generated pages and local resource links.
-- `.github/workflows/deploy.yml` deploys `public/` through GitHub Actions.
 
 ## Refresh the export
 
@@ -20,7 +19,7 @@ python3 scripts/validate_static.py
 Preview locally:
 
 ```bash
-python3 -m http.server 4173 --directory public
+python3 -m http.server 4173
 python3 scripts/validate_static.py --base-url http://127.0.0.1:4173
 ```
 
@@ -28,9 +27,10 @@ python3 scripts/validate_static.py --base-url http://127.0.0.1:4173
 
 1. Push this repository to GitHub.
 2. In GitHub, open Settings -> Pages.
-3. Set Build and deployment -> Source to "GitHub Actions".
-4. Add the custom domain `florianacelani.com` in the Pages settings.
-5. Point DNS for `florianacelani.com` at GitHub Pages:
+3. Set Build and deployment -> Source to "Deploy from a branch".
+4. Set Branch to `main` and folder to `/ (root)`.
+5. Add the custom domain `florianacelani.com` in the Pages settings.
+6. Point DNS for `florianacelani.com` at GitHub Pages:
 
    ```text
    @     A      185.199.108.153
@@ -53,13 +53,13 @@ python3 scripts/validate_static.py --base-url http://127.0.0.1:4173
    Remove the old apex and `www` `A` records that point to the WordPress host
    before adding the GitHub Pages records. DNS changes can take up to 24 hours.
 
-The export includes `public/CNAME` for branch-based Pages compatibility, but the
-workflow deployment still needs the custom domain configured in GitHub Pages.
+The root `CNAME` file keeps the custom domain attached for branch-based Pages
+deployments.
 
 ## Static form behavior
 
 The original Contact page used WordPress/Avada AJAX forms. Static hosting cannot
-run `admin-ajax.php`, so `public/assets/floriana-static.js` changes form
+run `admin-ajax.php`, so `assets/floriana-static.js` changes form
 submission into a `mailto:` flow to `celanifloriana@gmail.com`. Replace that
 with Formspree, Netlify Forms, or another hosted form endpoint if a real inbox
 submission service is needed.

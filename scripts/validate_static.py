@@ -13,8 +13,9 @@ from urllib.request import Request, urlopen
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PUBLIC = ROOT / "public"
+SITE_ROOT = ROOT
 HOST = "florianacelani.com"
+IGNORED_ROOT_DIRS = {".git", ".github", ".playwright-cli", "public", "scripts"}
 
 DYNAMIC_PATTERNS = (
     "wp-admin/admin-ajax.php",
@@ -35,15 +36,18 @@ def iter_text_files() -> list[Path]:
     suffixes = {".css", ".html", ".js", ".json", ".svg", ".txt", ".xml"}
     return [
         path
-        for path in PUBLIC.rglob("*")
-        if path.is_file() and (path.suffix.lower() in suffixes or path.name == "CNAME")
+        for path in SITE_ROOT.rglob("*")
+        if path.is_file()
+        and path.relative_to(SITE_ROOT).parts
+        and path.relative_to(SITE_ROOT).parts[0] not in IGNORED_ROOT_DIRS
+        and (path.suffix.lower() in suffixes or path.name == "CNAME")
     ]
 
 
 def local_file_for_path(path: str) -> Path:
     if path == "/":
-        return PUBLIC / "index.html"
-    target = PUBLIC / path.lstrip("/")
+        return SITE_ROOT / "index.html"
+    target = SITE_ROOT / path.lstrip("/")
     if path.endswith("/") or not target.suffix:
         target = target / "index.html"
     return target
@@ -96,23 +100,26 @@ def resolved_path(source: Path, url: str) -> str | None:
         return None
     if parsed.path.startswith("/"):
         return parsed.path
-    source_dir = source.parent.relative_to(PUBLIC).as_posix()
+    source_dir = source.parent.relative_to(SITE_ROOT).as_posix()
     source_dir = "" if source_dir == "." else source_dir
     return "/" + posixpath.normpath(posixpath.join(source_dir, parsed.path)).lstrip("/")
 
 
 def validate_files() -> list[str]:
     errors: list[str] = []
-    if not (PUBLIC / "index.html").exists():
-        errors.append("missing public/index.html")
-    if not (PUBLIC / ".nojekyll").exists():
-        errors.append("missing public/.nojekyll")
-    if (PUBLIC / "CNAME").read_text(encoding="utf-8", errors="replace").strip() != HOST:
-        errors.append("public/CNAME must contain florianacelani.com")
+    if not (SITE_ROOT / "index.html").exists():
+        errors.append("missing index.html")
+    if not (SITE_ROOT / ".nojekyll").exists():
+        errors.append("missing .nojekyll")
+    cname = SITE_ROOT / "CNAME"
+    if not cname.exists():
+        errors.append("missing CNAME")
+    elif cname.read_text(encoding="utf-8", errors="replace").strip() != HOST:
+        errors.append("CNAME must contain florianacelani.com")
 
     for path in iter_text_files():
         text = path.read_text(encoding="utf-8", errors="replace")
-        rel = path.relative_to(PUBLIC)
+        rel = path.relative_to(SITE_ROOT)
         for pattern in DYNAMIC_PATTERNS:
             if pattern in text:
                 errors.append(f"{rel}: dynamic WordPress endpoint left in text: {pattern}")
