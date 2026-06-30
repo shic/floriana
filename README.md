@@ -44,8 +44,14 @@ python3 scripts/validate_static.py --base-url http://127.0.0.1:4173
    www   CNAME  shic.github.io
    ```
 
-   Remove the old apex `A` record that points to the WordPress host before
-   adding the GitHub Pages records. DNS changes can take up to 24 hours.
+   If the domain's nameservers are Cloudflare, make these changes in
+   Cloudflare DNS and set the records to "DNS only" until GitHub Pages finishes
+   its certificate check. A proxied Cloudflare record returns Cloudflare IPs
+   instead of GitHub Pages IPs, which prevents GitHub Pages from validating the
+   custom domain.
+
+   Remove the old apex and `www` `A` records that point to the WordPress host
+   before adding the GitHub Pages records. DNS changes can take up to 24 hours.
 
 The export includes `public/CNAME` for branch-based Pages compatibility, but the
 workflow deployment still needs the custom domain configured in GitHub Pages.
