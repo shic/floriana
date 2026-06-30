@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import posixpath
 import re
 import sys
 from pathlib import Path
@@ -23,7 +24,7 @@ DYNAMIC_PATTERNS = (
 )
 
 URL_ATTR_RE = re.compile(
-    r"""(?:href|src|action|data-bg|data-src|data-orig-src|content)=["']([^"']+)["']""",
+    r"""(?:href|src|action|poster|data-bg|data-bg-url|data-src|data-orig-src)=["']([^"']+)["']""",
     re.IGNORECASE,
 )
 SRCSET_RE = re.compile(r"""(?:srcset|data-srcset)=["']([^"']+)["']""", re.IGNORECASE)
@@ -51,12 +52,16 @@ def local_file_for_path(path: str) -> Path:
 def is_local_url(url: str) -> bool:
     if not url or url.startswith(("#", "data:", "mailto:", "tel:", "javascript:")):
         return False
+    if any(token in url for token in (" ", "\n", "\t", "${", "<svg", "%3Csvg", "url=")):
+        return False
     parsed = urlparse(url)
     if parsed.scheme in {"http", "https"} and parsed.netloc != HOST:
         return False
     if parsed.netloc and parsed.netloc != HOST:
         return False
-    return parsed.path.startswith("/")
+    if parsed.scheme or parsed.netloc:
+        return True
+    return parsed.path.startswith(("/", "./", "../")) or "/" in parsed.path
 
 
 def should_check_file(path: str) -> bool:
@@ -83,6 +88,19 @@ def collect_urls(text: str) -> set[str]:
     return urls
 
 
+def resolved_path(source: Path, url: str) -> str | None:
+    parsed = urlparse(url)
+    if parsed.scheme in {"http", "https"} and parsed.netloc != HOST:
+        return None
+    if parsed.path in {"", "."}:
+        return None
+    if parsed.path.startswith("/"):
+        return parsed.path
+    source_dir = source.parent.relative_to(PUBLIC).as_posix()
+    source_dir = "" if source_dir == "." else source_dir
+    return "/" + posixpath.normpath(posixpath.join(source_dir, parsed.path)).lstrip("/")
+
+
 def validate_files() -> list[str]:
     errors: list[str] = []
     if not (PUBLIC / "index.html").exists():
@@ -103,12 +121,14 @@ def validate_files() -> list[str]:
         for url in collect_urls(text):
             if not is_local_url(url):
                 continue
-            parsed = urlparse(url)
-            if not should_check_file(parsed.path):
+            path_value = resolved_path(path, url)
+            if not path_value:
                 continue
-            target = local_file_for_path(parsed.path)
+            if not should_check_file(path_value):
+                continue
+            target = local_file_for_path(path_value)
             if not target.exists():
-                errors.append(f"{rel}: missing local target {parsed.path}")
+                errors.append(f"{rel}: missing local target {url} -> {path_value}")
     return sorted(set(errors))
 
 

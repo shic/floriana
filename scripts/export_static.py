@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import html
 import os
+import posixpath
 import re
 import shutil
 import sys
@@ -82,11 +83,23 @@ ESCAPED_DOMAIN_RE = re.compile(
     re.IGNORECASE,
 )
 ROOT_RELATIVE_RE = re.compile(
-    r"""(?:href|src|action|data-bg|data-src|data-orig-src|content)=["'](/[^"']+)["']""",
+    r"""[-:\w]+=["'](/[^"']+)["']""",
     re.IGNORECASE,
 )
 SRCSET_RE = re.compile(r"""(?:srcset|data-srcset)=["']([^"']+)["']""", re.IGNORECASE)
 CSS_URL_RE = re.compile(r"url\(([^)]+)\)", re.IGNORECASE)
+HTML_URL_ATTR_RE = re.compile(
+    r"""(?P<prefix>\b[-:\w]+=["'])(?P<url>/[^"']*)(?P<suffix>["'])""",
+    re.IGNORECASE,
+)
+HTML_SRCSET_ATTR_RE = re.compile(
+    r"""(?P<prefix>\b(?:srcset|data-srcset)=["'])(?P<srcset>[^"']+)(?P<suffix>["'])""",
+    re.IGNORECASE,
+)
+JS_ROOT_STRING_RE = re.compile(
+    r"""(?P<quote>["'])(?P<url>(?:\\/|/)(?:wp-content|wp-includes|assets)[^"']*)(?P=quote)""",
+    re.IGNORECASE,
+)
 
 
 def normalize_url(url: str, base: str = SITE + "/") -> str | None:
@@ -140,6 +153,11 @@ def is_asset_url(url: str) -> bool:
     return path.startswith(("/wp-content/", "/wp-includes/"))
 
 
+def is_asset_path(path: str) -> bool:
+    suffix = Path(path).suffix.lower()
+    return suffix in ASSET_EXTENSIONS or path.startswith("/assets/")
+
+
 def local_path_for_url(url: str, *, asset: bool = False) -> Path:
     parsed = urlparse(url)
     path = unquote(parsed.path or "/")
@@ -150,6 +168,89 @@ def local_path_for_url(url: str, *, asset: bool = False) -> Path:
     elif not path or path == "/":
         path = "/index.html"
     return PUBLIC / path.lstrip("/")
+
+
+def relative_reference(source_file: Path, url: str) -> str:
+    if not url.startswith("/") or url.startswith("//"):
+        return url
+    parsed = urlparse(url)
+    if not parsed.path.startswith("/"):
+        return url
+
+    asset = is_asset_path(parsed.path)
+    target = local_path_for_url(SITE + parsed.path, asset=asset)
+    source_dir = source_file.parent.relative_to(PUBLIC).as_posix()
+    source_dir = "." if source_dir == "." else source_dir
+    target_rel = target.relative_to(PUBLIC).as_posix()
+    rel = posixpath.relpath(target_rel, start=source_dir)
+
+    if not asset and target_rel.endswith("/index.html"):
+        rel_dir = posixpath.dirname(rel)
+        rel = "./" if rel_dir in {"", "."} else rel_dir.rstrip("/") + "/"
+
+    return urlunparse(("", "", rel, "", parsed.query, parsed.fragment))
+
+
+def relativize_srcset(source_file: Path, srcset: str) -> str:
+    parts: list[str] = []
+    for candidate in srcset.split(","):
+        leading = candidate[: len(candidate) - len(candidate.lstrip())]
+        stripped = candidate.strip()
+        if not stripped:
+            parts.append(candidate)
+            continue
+        bits = stripped.split()
+        bits[0] = relative_reference(source_file, bits[0])
+        parts.append(leading + " ".join(bits))
+    return ", ".join(parts)
+
+
+def relativize_html(text: str, output_file: Path) -> str:
+    text = relativize_css(text, output_file)
+    text = HTML_URL_ATTR_RE.sub(
+        lambda match: (
+            match.group("prefix")
+            + relative_reference(output_file, match.group("url"))
+            + match.group("suffix")
+        ),
+        text,
+    )
+    text = HTML_SRCSET_ATTR_RE.sub(
+        lambda match: (
+            match.group("prefix")
+            + relativize_srcset(output_file, match.group("srcset"))
+            + match.group("suffix")
+        ),
+        text,
+    )
+    text = JS_ROOT_STRING_RE.sub(
+        lambda match: (
+            match.group("quote")
+            + relative_string_reference(output_file, match.group("url"))
+            + match.group("quote")
+        ),
+        text,
+    )
+    return text
+
+
+def relative_string_reference(source_file: Path, url: str) -> str:
+    slash_escaped = "\\/" in url
+    unescaped = url.replace("\\/", "/")
+    relative = relative_reference(source_file, unescaped)
+    return relative.replace("/", "\\/") if slash_escaped else relative
+
+
+def relativize_css(text: str, output_file: Path) -> str:
+    def replace_url(match: re.Match[str]) -> str:
+        raw = match.group(1).strip()
+        quote_char = raw[:1] if raw[:1] in {"'", '"'} else ""
+        unquoted = raw[1:-1] if quote_char and raw.endswith(quote_char) else raw
+        if not unquoted.startswith("/") or unquoted.startswith("//"):
+            return match.group(0)
+        return f"url({quote_char}{relative_reference(output_file, unquoted)}{quote_char})"
+
+    return CSS_URL_RE.sub(replace_url, text)
 
 
 def fetch(url: str) -> tuple[bytes, str]:
@@ -254,6 +355,12 @@ def localize_internal_urls(text: str) -> str:
 
 def strip_wordpress_runtime(html_text: str) -> str:
     html_text = re.sub(
+        r'href=["\'](?:https?://florianacelani\.com)?/wp-admin/?["\']',
+        'href="/"',
+        html_text,
+        flags=re.IGNORECASE,
+    )
+    html_text = re.sub(
         r"\s*<link[^>]+rel=[\"'](?:alternate|EditURI|pingback|shortlink)[\"'][^>]*>\s*",
         "\n",
         html_text,
@@ -330,16 +437,17 @@ def write_text(path: Path, text: str) -> None:
     write_file(path, text.encode("utf-8"))
 
 
-def process_html(raw: bytes, url: str) -> tuple[str, set[str]]:
+def process_html(raw: bytes, url: str, output_file: Path) -> tuple[str, set[str]]:
     text = raw.decode("utf-8", errors="replace")
     discovered = extract_urls(text, url)
     text = strip_wordpress_runtime(text)
     text = localize_internal_urls(text)
     text = inject_static_assets(text)
+    text = relativize_html(text, output_file)
     return text, discovered
 
 
-def process_asset(raw: bytes, url: str, content_type: str) -> tuple[bytes, set[str]]:
+def process_asset(raw: bytes, url: str, content_type: str, output_file: Path) -> tuple[bytes, set[str]]:
     discovered: set[str] = set()
     path = urlparse(url).path
     suffix = Path(path).suffix.lower()
@@ -347,6 +455,8 @@ def process_asset(raw: bytes, url: str, content_type: str) -> tuple[bytes, set[s
         text = raw.decode("utf-8", errors="replace")
         discovered = extract_urls(text, url, include_css_urls=suffix == ".css")
         text = localize_internal_urls(text)
+        if suffix == ".css":
+            text = relativize_css(text, output_file)
         return text.encode("utf-8"), discovered
     return raw, discovered
 
@@ -371,10 +481,10 @@ def write_support_files() -> None:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pagina non trovata - Floriana Celani</title>
-  <meta http-equiv="refresh" content="0; url=/">
+  <meta http-equiv="refresh" content="0; url=./">
 </head>
 <body>
-  <p>Pagina non trovata. <a href="/">Torna alla home</a>.</p>
+  <p>Pagina non trovata. <a href="./">Torna alla home</a>.</p>
 </body>
 </html>
 """,
@@ -415,6 +525,7 @@ def write_support_files() -> None:
 
 
 def write_redirect(path: Path, target: str) -> None:
+    relative_target = relative_reference(path, target)
     write_text(
         path,
         f"""<!doctype html>
@@ -423,11 +534,11 @@ def write_redirect(path: Path, target: str) -> None:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Redirect - Floriana Celani</title>
-  <meta http-equiv="refresh" content="0; url={target}">
-  <link rel="canonical" href="{target}">
+  <meta http-equiv="refresh" content="0; url={relative_target}">
+  <link rel="canonical" href="{relative_target}">
 </head>
 <body>
-  <p><a href="{target}">Continua</a></p>
+  <p><a href="{relative_target}">Continua</a></p>
 </body>
 </html>
 """,
@@ -461,8 +572,9 @@ def export_site() -> None:
         except Exception as exc:  # noqa: BLE001 - keep export moving.
             print(f"warn: page failed {url}: {exc}", file=sys.stderr)
             continue
-        text, discovered = process_html(raw, url)
-        write_text(local_path_for_url(url), text)
+        output_file = local_path_for_url(url)
+        text, discovered = process_html(raw, url, output_file)
+        write_text(output_file, text)
         for discovered_url in sorted(discovered):
             if is_asset_url(discovered_url):
                 if discovered_url not in seen_assets:
@@ -481,8 +593,9 @@ def export_site() -> None:
         except Exception as exc:  # noqa: BLE001 - keep export moving.
             print(f"warn: asset failed {url}: {exc}", file=sys.stderr)
             continue
-        data, discovered = process_asset(raw, url, content_type)
-        write_file(local_path_for_url(url, asset=True), data)
+        output_file = local_path_for_url(url, asset=True)
+        data, discovered = process_asset(raw, url, content_type, output_file)
+        write_file(output_file, data)
         for discovered_url in sorted(discovered):
             if is_asset_url(discovered_url) and discovered_url not in seen_assets:
                 asset_queue.append(discovered_url)
